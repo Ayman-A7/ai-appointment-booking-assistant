@@ -1,0 +1,585 @@
+{
+  "name": "AI Appointment Booking Assistant",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "AI Appointment Booking Assistant",
+        "formDescription": "Booking Form",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Name"
+            },
+            {
+              "fieldLabel": "Email",
+              "fieldType": "email"
+            },
+            {
+              "fieldLabel": "Booking Request",
+              "fieldType": "textarea"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        -192,
+        32
+      ],
+      "id": "a5d3e2a9-29ee-4ca4-b6b0-577833b44d67",
+      "name": "On form submission",
+      "webhookId": "ea05e667-4d0d-49b9-92b8-fe9051872774"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c2aa6ceb-2694-4e30-8c6a-5c2331251f70",
+              "leftValue": "={{ $json.available }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        832,
+        32
+      ],
+      "id": "d5daff43-a96a-43f2-a82e-d34cd078d30a",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "resource": "calendar",
+        "calendar": {
+          "__rl": true,
+          "value": "aymanamjad09541@gmail.com",
+          "mode": "list",
+          "cachedResultName": "aymanamjad09541@gmail.com"
+        },
+        "timeMin": "={{ DateTime.fromISO($('Code in JavaScript').item.json.requested_date + \"T\" + ($('Code in JavaScript').item.json.requested_time || \"09:00:00\")).setZone(\"Asia/Karachi\").toISO() }}",
+        "timeMax": "={{ DateTime.fromISO($('Code in JavaScript').item.json.requested_date + \"T\" + ($('Code in JavaScript').item.json.requested_time || \"09:00:00\")).plus({ minutes: 60 }).setZone(\"Asia/Karachi\").toISO() }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        608,
+        32
+      ],
+      "id": "ce366bab-b55e-4920-8bad-0e012f573c75",
+      "name": "Get availability in a calendar",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "MbPchSTkTZ6IY5td",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an AI appointment booking assistant.\n\nToday's date is {{ $now }}.\n\nAnalyze the customer's booking request.\n\nReturn ONLY valid JSON.\n\n{\n  \"customer_name\":\"\",\n  \"email\":\"\",\n  \"appointment_type\":\"\",\n  \"requested_date\":\"\",\n  \"requested_time\":\"\",\n  \"duration_minutes\":60,\n  \"summary\":\"\"\n}\n\nCustomer Name:\n{{ $json.Name }}\nEmail:\n{{ $json.Email }}\nBooking Request:\n{{ $json['Booking Request'] }}",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        32,
+        32
+      ],
+      "id": "d693132a-9b19-4542-8ba8-a23db5ff8080",
+      "name": "Basic LLM Chain1"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        112,
+        256
+      ],
+      "id": "4f4fd4e3-52f3-46bf-8297-cb2cda7b0df6",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "WrbY98auAVWVuuZ6",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the text response from the LLM node (e.g., 'Basic LLM Chain' or preceding node)\nconst rawResponse = $input.first().json.text || $input.first().json.output || \"\";\n\ntry {\n  // Clean potential markdown code blocks (e.g., ```json ... ```) that LLMs often add\n  const cleanedText = rawResponse\n    .replace(/```json/g, '')\n    .replace(/```/g, '')\n    .trim();\n\n  // Parse into a JSON object\n  const jsonOutput = JSON.parse(cleanedText);\n\n  // Return formatted output for n8n\n  return [{ json: jsonOutput }];\n} catch (error) {\n  // Fallback error handling if JSON parsing fails\n  return [{\n    json: {\n      error: \"Failed to parse JSON\",\n      rawResponse: rawResponse\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        32
+      ],
+      "id": "649abe08-d8c3-4572-bae0-c26d413556e5",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a professional appointment booking assistant.\n\nThe customer's requested appointment time is unavailable.\n\nWrite a friendly and professional email.\n\nRequirements:\n- Apologize that the requested time is already booked.\n- Explain that the business would be happy to schedule another appointment.\n- Ask the customer to reply with another preferred date and time.\n- Keep the email concise and professional.\n- Sign off with \n\"Best regards, Appointment Team\".\n\nCustomer Name:\n{{ $('Code in JavaScript').item.json.customer_name }}\n\nRequested Appointment:\n{{ $('Code in JavaScript').item.json.requested_time }}",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1088,
+        208
+      ],
+      "id": "0213067b-94d9-420d-b47c-a7d39fdab94f",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        1088,
+        400
+      ],
+      "id": "3ad1ec23-e69f-48aa-8f23-1e7f5d90840f",
+      "name": "Google Gemini Chat Model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "WrbY98auAVWVuuZ6",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "aymanamjad09541@gmail.com",
+          "mode": "list",
+          "cachedResultName": "aymanamjad09541@gmail.com"
+        },
+        "start": "={{ $('Code in JavaScript').item.json.requested_date + \"T\" + ($('Code in JavaScript').item.json.requested_time || \"09:00:00\") }}",
+        "end": "={{ DateTime.fromISO($('Code in JavaScript').item.json.requested_date + \"T\" + ($('Code in JavaScript').item.json.requested_time || \"09:00:00\")).plus({ hours: 1 }).toISO() }}",
+        "additionalFields": {
+          "description": "=Customer:  {{ $('Code in JavaScript').item.json.customer_name }}\nEmail: {{ $('Code in JavaScript').item.json.email }}\nSummary: {{ $('Code in JavaScript').item.json.summary }}",
+          "summary": "={{ $('Code in JavaScript').item.json.appointment_type }} - {{ $('Code in JavaScript').item.json.customer_name }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1120,
+        -80
+      ],
+      "id": "b73dec8f-d31e-4276-92af-dd739e15a195",
+      "name": "Create an event",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "MbPchSTkTZ6IY5td",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Code in JavaScript').item.json.email }}",
+        "subject": "Appointment Confirmed 🎉",
+        "message": "=Hi {{ $('Code in JavaScript').item.json.customer_name }}, \nThank you for booking with us!  Your appointment has been successfully confirmed.\n📅 Date: {{ $('Code in JavaScript').item.json.requested_date }} \n🕒 Time: {{ $('Code in JavaScript').item.json.requested_time }}\n🩺 Appointment Type: {{ $('Code in JavaScript').item.json.appointment_type }} \nIf you need to reschedule or cancel, simply reply to this email.  We look forward to seeing you! \nBest regards,  Appointment Team",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1408,
+        -80
+      ],
+      "id": "7c9138e6-33bf-4d39-8389-2d57457034ae",
+      "name": "Send a message",
+      "webhookId": "3f7832c4-1f49-4c56-a749-e4752cacd951",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "RTezo73wOPwIFqmL",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Code in JavaScript').item.json.email }}",
+        "subject": "Appointment Request Status - Slot Unavailable",
+        "message": "={{ $('Basic LLM Chain').item.json.text }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1440,
+        192
+      ],
+      "id": "5c7ea72d-b014-4590-8c5d-77f424248f4a",
+      "name": "Send a message1",
+      "webhookId": "280a98c6-1439-40fa-b351-446d4d956f7a",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "RTezo73wOPwIFqmL",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "airtableOAuth2Api",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appfsLSa3ghYI24Ch",
+          "mode": "list",
+          "cachedResultName": "AI Booking Assisatnt",
+          "cachedResultUrl": "https://airtable.com/appfsLSa3ghYI24Ch"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblWgIKjKJZacYLSQ",
+          "mode": "list",
+          "cachedResultName": "Appointments",
+          "cachedResultUrl": "https://airtable.com/appfsLSa3ghYI24Ch/tblWgIKjKJZacYLSQ"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Customer Name": "={{ $('Code in JavaScript').item.json.customer_name }}",
+            "Email": "={{ $('Code in JavaScript').item.json.email }}",
+            "Appointment Type": "={{ $('Code in JavaScript').item.json.appointment_type }}",
+            "Date": "={{ DateTime.fromISO($('Code in JavaScript').item.json.requested_date).toFormat('yyyy-MM-dd') }}",
+            "Time": "={{ $('Code in JavaScript').item.json.requested_date + \"T\" + $('Code in JavaScript').item.json.requested_time }}",
+            "Status": "Confirmed",
+            "Summary": "={{ $('Code in JavaScript').item.json.summary }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Customer Name",
+              "displayName": "Customer Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Appointment Type",
+              "displayName": "Appointment Type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Time",
+              "displayName": "Time",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Confirmed",
+                  "value": "Confirmed"
+                },
+                {
+                  "name": "Pending",
+                  "value": "Pending"
+                },
+                {
+                  "name": "Cancelled",
+                  "value": "Cancelled"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Summary",
+              "displayName": "Summary",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Created At",
+              "displayName": "Created At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1584,
+        -80
+      ],
+      "id": "708da84f-e47d-46d0-9c0e-d1390d12063e",
+      "name": "Create a record",
+      "credentials": {
+        "airtableOAuth2Api": {
+          "id": "HTKgdkMecNpgMRig",
+          "name": "Airtable account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0BJC2TTW9Y",
+          "mode": "list",
+          "cachedResultName": "all-aymanamjad7"
+        },
+        "text": "=📅 New Appointment Booked \n👤 Customer: {{ $('Code in JavaScript').item.json.customer_name }}\n📧 Email: {{ $('Code in JavaScript').item.json.email }}\n🩺 Type: {{ $('Code in JavaScript').item.json.appointment_type }}\n📅 Date: {{ $('Code in JavaScript').item.json.requested_date }}\n🕒 Time: {{ $('Code in JavaScript').item.json.requested_time }}\n✅ Status: Confirmed",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        1792,
+        -80
+      ],
+      "id": "98a8c556-11e6-42e8-b03b-30b38b3f0853",
+      "name": "Send a message2",
+      "webhookId": "7b2047dc-b1ff-4094-8d91-a76b71b6e9ca",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "s8CVofIRhaIH2p2D",
+          "name": "Slack account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get availability in a calendar": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Create an event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Get availability in a calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an event": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Create a record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a record": {
+      "main": [
+        [
+          {
+            "node": "Send a message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "b3656184-1629-4967-b4ba-ceb3499c3e86",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4749ef1dff9dab97533d296fc60571d1f46847c4cabe69d94e1cae900f679a95"
+  },
+  "nodeGroups": [],
+  "id": "vb6ZEsFvKL6SpVda",
+  "tags": []
+}
